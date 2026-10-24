@@ -43,9 +43,10 @@ function flag(name: string, fallback: string) {
 const SEED = 5;
 const trays = Number(flag('trays', '12'));
 /** Wall-clock ms per tick: 200 ms = 5× real time (same as the engine clock). */
-// Global clock: one scenario second per 1.5 s of wall time (the engine needs
-// ~1.2 s per tick, so it can keep up).
-const tickMs = Number(flag('ms', '1500'));
+// Global clock: one scenario second per 2 s of wall time. The engine needs
+// ~1.2 s per tick on average and more when customers bunch up, so it keeps
+// up; 180 ticks take about 6 minutes.
+const tickMs = Number(flag('ms', '2000'));
 const config = databaseConfig();
 const uri = flag('uri', config.uri);
 const database = flag('db', config.database);

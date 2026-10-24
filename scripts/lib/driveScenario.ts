@@ -3,7 +3,6 @@ import { Identity } from 'spacetimedb';
 import type { DbConnection } from '../../packages/bindings/src';
 import type { ScenarioCustomer } from '../../apps/web/src/sync/scenarioCatalog';
 import { cartKeyFor, menuByName } from '../../apps/web/src/sync/menu';
-import { WALK_IN } from '../../apps/web/src/sync/shopLayout';
 import { runName, type Load } from '../../apps/web/src/sync/live/scenarioNames';
 
 /**
@@ -30,7 +29,7 @@ export interface DriveOptions {
   /**
    * Global clock: wall-clock ms per tick (one scenario second). Tick n is due
    * at start + n × tickMs; a late tick is caught up at once, so time never
-   * drifts. Default 1500 (the engine needs ~1.2 s per tick).
+   * drifts. Default 2000 (the engine needs ~1.2 s per tick, more when busy).
    */
   tickMs?: number;
   /** Called once with the global clock (start epoch ms, ms per tick) for viewers. */
@@ -44,7 +43,7 @@ export interface DriveOptions {
   log?(line: string): void;
 }
 
-/** Customer deadline: 90 s after walking in; orders are enqueued WALK_IN s later. */
+/** Customer deadline: 90 s after walking in (the dashboard's arrival + 90 rule). */
 const DEADLINE_FROM_DOOR = 90;
 /** Runs one identity may own (engine `create_run` limit). */
 const OWNER_RUN_LIMIT = 10;
@@ -113,26 +112,33 @@ export async function driveScenario(conn: DbConnection, o: DriveOptions) {
         ),
       `run "${r.name}"`,
     );
-    await conn.reducers.setPolicy({
-      runId: run.id,
-      configJson: JSON.stringify({ policy: r.policy }),
-    });
-    for (const hex of o.viewers ?? [])
-      await conn.reducers.grantMember({
+    // Policy and viewer grants go out together (the engine is slow per call).
+    await Promise.all([
+      conn.reducers.setPolicy({
         runId: run.id,
-        identity: Identity.fromString(hex),
-        permission: 'viewer',
-        enabled: true,
-      });
+        configJson: JSON.stringify({ policy: r.policy }),
+      }),
+      ...(o.viewers ?? []).map((hex) =>
+        conn.reducers.grantMember({
+          runId: run.id,
+          identity: Identity.fromString(hex),
+          permission: 'viewer',
+          enabled: true,
+        }),
+      ),
+    ]);
     ids.push(run.id);
     log(`run ${run.id}: ${r.name}`);
   }
   o.onRuns?.({ baseline: ids[0], sync: ids[1] });
 
-  // Customers reach the counter WALK_IN s after the door; that is when they order.
+  // A customer's orders enter the engine the moment they walk in (the
+  // dashboard dates the arrival by that tick). The schedule is shifted so
+  // the first customer walks in at tick 0: the shop is busy from the start.
+  const first = Math.min(...o.customers.map((c) => c.arrival));
   const arrivals = o.customers.map((c) => ({
     ...c,
-    tick: Math.round(c.arrival) + WALK_IN,
+    tick: Math.round(c.arrival - first),
   }));
   const lastArrival = Math.max(...arrivals.map((c) => c.tick));
   const status = (id: bigint) =>
@@ -141,11 +147,10 @@ export async function driveScenario(conn: DbConnection, o: DriveOptions) {
   // Tick timing, per phase in ms, to see where the clock gets uneven.
   const timing = new TickTiming();
   // The global clock all viewers follow: tick n is due at startedAt + n × tickMs.
-  const tickMs = o.tickMs ?? 1500;
-  const startedAt = Date.now();
-  o.onClock?.({ startedAt, tickMs });
-  // Viewers read it from this line too (the dev server forwards it).
-  log(`clock ${startedAt} ${tickMs}`);
+  // It starts once the first tick is written (see the loop), so the shop is
+  // already moving when viewers start following it.
+  const tickMs = o.tickMs ?? 2000;
+  let startedAt = 0;
   for (let tick = 0; !signal?.aborted; tick++) {
     timing.begin();
     // Send this tick's orders in one go (calls keep their order on the
@@ -162,7 +167,7 @@ export async function driveScenario(conn: DbConnection, o: DriveOptions) {
               externalKey: `${c.id}-${k + 1}`,
               cartKey: cartKeyFor(c.id, c.items),
               recipe: entry.recipe,
-              deadlineInTicks: DEADLINE_FROM_DOOR - WALK_IN,
+              deadlineInTicks: DEADLINE_FROM_DOOR,
               value: 1,
               priority: 0,
               // The customer leaves with the drinks at once; the tray is free right away.
@@ -192,6 +197,13 @@ export async function driveScenario(conn: DbConnection, o: DriveOptions) {
       'scenario tick',
     );
     timing.mark('confirm');
+    if (tick === 0) {
+      // Tick 1 is in the database: call it "now" on the global clock.
+      startedAt = Date.now() - tickMs;
+      o.onClock?.({ startedAt, tickMs });
+      // Viewers read it from this line too (the dev server forwards it).
+      log(`clock ${startedAt} ${tickMs}`);
+    }
     if (tick > lastArrival + 10000)
       throw new Error(
         'Scenario stalled: inspect resource availability, budget, and task states.',
