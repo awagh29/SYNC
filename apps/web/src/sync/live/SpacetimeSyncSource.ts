@@ -33,9 +33,11 @@ const TOKEN_KEY = `sync-token:${env.VITE_SPACETIMEDB_URI}:${env.VITE_SPACETIMEDB
 const REBUILD_MS = 150;
 /**
  * An unfinished scenario whose tick has not moved for this long (ms) has lost
- * its driver (feeder stopped): it is shown as stopped and can be rerun.
+ * its driver (feeder stopped): it is shown as stopped and can be rerun. The
+ * engine can take several seconds for one busy tick, so this is generous;
+ * otherwise a slow tick flips the run to stopped and back (controls flicker).
  */
-const STALL_MS = 5000;
+const STALL_MS = 20000;
 
 /** Reads a stored token; storage can be unavailable (private mode). */
 function loadToken() {
