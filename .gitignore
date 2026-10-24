@@ -8,3 +8,8 @@ dist/
 coverage/
 *.log
 *.png
+# SpacetimeDB CLI: personal overrides (database name, etc.) stay local
+spacetime.local.json
+spacetime.*.local.json
+# macOS Finder metadata
+.DS_Store
