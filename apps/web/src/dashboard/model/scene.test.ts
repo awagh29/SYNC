@@ -365,18 +365,19 @@ describe('pixel-art presentation data', () => {
 });
 
 describe('High load (design/MOCK_AND_TEST_DESIGN.md §5.6)', () => {
-  it('reaches the rope fold with a 5 s rush gap, which the default never does', () => {
-    /** True if the line folds behind the rope at any second up to T. */
-    const folds = (rushGap?: number) => {
+  it('folds the line behind the rope longer with a tighter rush gap', () => {
+    /** Seconds (up to T) the line is folded behind the rope. */
+    const folded = (rushGap?: number) => {
       const data = normalizeRun(
         simulate('baseline', { seed: 1, customers: 36, rushGap }),
       );
-      for (let t = 0; t <= 420; t += 1)
-        if (sceneAt(data, t).queueFolded) return true;
-      return false;
+      let n = 0;
+      for (let t = 0; t <= data.run.objective.T; t += 1)
+        if (sceneAt(data, t).queueFolded) n++;
+      return n;
     };
-    expect(folds(5)).toBe(true);
-    expect(folds()).toBe(false);
+    expect(folded(5)).toBeGreaterThan(0);
+    expect(folded(5)).toBeGreaterThan(folded(20));
   });
 });
 

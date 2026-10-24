@@ -13,7 +13,7 @@ import type {
   TimedScore,
 } from '../contract';
 import { parseCartKey } from '../menu';
-import { buildLayout, ROLE_NAME, ROLE_TYPE } from '../shopLayout';
+import { buildLayout, ROLE_NAME, ROLE_TYPE, SCENARIO_T } from '../shopLayout';
 
 /**
  * Pure mapping from SpacetimeDB `ui_*` view rows to the dashboard contract
@@ -92,7 +92,7 @@ export interface RunRows {
 }
 
 /** Horizon T of objective (20) in ticks (1 tick = 1 scenario second). */
-export const LIVE_T = 420;
+export const LIVE_T = SCENARIO_T;
 
 /** Engine task kinds → short labels shown in decision rows and details. */
 const TASK_LABEL: Record<string, string> = {

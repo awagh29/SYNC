@@ -9,6 +9,15 @@ import type { Agent, Layout, Resource, ResourceType, Role } from './contract';
 /** Seconds a customer needs to walk from the door to the counter before ordering can start. */
 export const WALK_IN = 2;
 
+/**
+ * Scenario length T in seconds (= engine ticks): the scoring window of
+ * objective (20) and the span customers arrive in. 180 ticks at 2 s per tick
+ * is about 6 minutes of wall time.
+ */
+export const SCENARIO_T = 180;
+/** Length the first sample scenario was written for; arrivals scale by T / this. */
+export const SAMPLE_T = 420;
+
 /** Headcount per role (1–2). The cleaner is always 1. */
 export type StaffCounts = Partial<Record<Exclude<Role, 'cleaner'>, 1 | 2>>;
 

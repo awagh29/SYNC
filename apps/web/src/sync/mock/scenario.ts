@@ -15,7 +15,13 @@ import type {
   Task,
 } from '../contract';
 import { MENU } from '../menu';
-import { buildLayout, WALK_IN, type StaffCounts } from '../shopLayout';
+import {
+  buildLayout,
+  SAMPLE_T,
+  SCENARIO_T,
+  WALK_IN,
+  type StaffCounts,
+} from '../shopLayout';
 
 // Re-exported so existing callers (tests, feeder) keep one import site.
 export { MENU, buildLayout };
@@ -37,7 +43,7 @@ export interface ScenarioOptions {
   /** 'morning' front-loads arrivals (rush); anything else spaces them evenly. */
   scenario?: string;
   /**
-   * Seconds between arrivals during the morning rush (default 14). Lower it
+   * Seconds between arrivals during the morning rush (default 6). Lower it
    * to load the floor harder (design/MOCK_AND_TEST_DESIGN.md §3.4); values
    * that are not a positive number fall back to the default.
    */
@@ -125,16 +131,21 @@ const SHORT_WORK: Record<ResourceType, string> = {
 const PREPOSITION_WINDOW = 6;
 /**
  * Arrival rate relative to the first sample (rush 14 s, later 17 s, 24
- * customers). Raising it brings more customers, more often, over the same
- * horizon T (e.g. 1.2 → 29 customers, 11.67 s / 14.17 s).
+ * customers over 420 s). Raising it brings more customers, more often.
  */
 const ARRIVAL_RATE = 1;
+/**
+ * The same customers squeezed into the scenario length: arrival times scale
+ * by SCENARIO_T / SAMPLE_T (180 / 420 ≈ 0.43), so the shop gets busier.
+ */
+const TIME_SCALE = SCENARIO_T / SAMPLE_T;
 /** Customers per run by default (24 × ARRIVAL_RATE, rounded). */
 export const DEFAULT_CUSTOMERS = Math.round(24 * ARRIVAL_RATE);
 /** Default seconds between arrivals during the morning rush (ScenarioOptions.rushGap). */
-export const DEFAULT_RUSH_GAP = Math.round((14 / ARRIVAL_RATE) * 100) / 100;
+export const DEFAULT_RUSH_GAP =
+  Math.round(((14 * TIME_SCALE) / ARRIVAL_RATE) * 100) / 100;
 /** Seconds between arrivals after the rush. */
-const CALM_GAP = Math.round((17 / ARRIVAL_RATE) * 100) / 100;
+const CALM_GAP = Math.round(((17 * TIME_SCALE) / ARRIVAL_RATE) * 100) / 100;
 
 /** Small deterministic PRNG (LCG) so a seed always reproduces the same run. */
 export function rng(seed: number) {
@@ -190,7 +201,7 @@ export function simulate(policy: Policy, options: ScenarioOptions): RunData {
     seed,
     scenario = 'morning',
     customers = DEFAULT_CUSTOMERS,
-    T = 420,
+    T = SCENARIO_T,
   } = options;
   const rushGap =
     options.rushGap !== undefined &&
@@ -211,7 +222,9 @@ export function simulate(policy: Policy, options: ScenarioOptions): RunData {
     const id = `c${i + 1}`;
     const rush = scenario === 'morning' && i < customers / 2;
     // Arrivals: tighter spacing during the morning rush, plus a little noise.
-    const arrival = round(i * (rush ? rushGap : CALM_GAP) + random() * 4);
+    const arrival = round(
+      i * (rush ? rushGap : CALM_GAP) + random() * 4 * TIME_SCALE,
+    );
     // Sample deadline rule. Provisional: ask the user before changing (late definition).
     const deadline = round(arrival + 90);
     // 1 item 55%, 2 items 30%, 3 items 15%.
@@ -786,7 +799,7 @@ export function benchmark(
   const r2 = (v: number) => Math.round(v * 100) / 100;
   return {
     scenario: options.scenario ?? 'morning',
-    T: options.T ?? 420,
+    T: options.T ?? SCENARIO_T,
     seeds,
     metric: 'completedInT',
     baselineMean: r2(mean(perSeed.map((p) => p.baseline))),
