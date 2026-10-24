@@ -1,4 +1,5 @@
-import type { Policy } from '../../sync/contract';
+import type { Policy, RunData } from '../../sync/contract';
+import type { Lanes } from '../model/lanes';
 import type { Scene } from '../model/scene';
 import { FloorCanvas } from '../floor/FloorCanvas';
 import type { Highlight } from '../floor/FloorScene';
@@ -12,10 +13,18 @@ const TITLE: Record<Policy, string> = { baseline: 'Baseline', sync: 'SYNC' };
 export function ShopCard({
   policy,
   scene,
+  data,
+  lanes,
+  timeRef,
   highlight,
 }: {
   policy: Policy;
+  /** Floor at the panel time (a few updates per second): Done / Late. */
   scene: Scene | null;
+  /** Run, lanes and precise time for the Phaser floor (drawn every frame). */
+  data: RunData | null;
+  lanes: Lanes | undefined;
+  timeRef: { current: number };
   highlight: Highlight;
 }) {
   return (
@@ -38,7 +47,9 @@ export function ShopCard({
         </dl>
       </header>
       <FloorCanvas
-        scene={scene}
+        data={data}
+        lanes={lanes}
+        timeRef={timeRef}
         highlight={highlight}
         label={`${TITLE[policy]} floor at ${Math.round(scene?.t ?? 0)} seconds`}
       />

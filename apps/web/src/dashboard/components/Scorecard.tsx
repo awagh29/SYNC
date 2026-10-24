@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { BenchmarkSummary, Score } from '../../sync/contract';
 
 /**
@@ -81,7 +82,8 @@ function summary(baseline: Score, sync: Score) {
   return `${head}, for ${diff(planning, 'more', 'less', 'ms planning time')}.`;
 }
 
-export function Scorecard({
+/** Memoised: the scores change about once per second, not every frame. */
+export const Scorecard = memo(function Scorecard({
   sync,
   baseline,
   benchmark,
@@ -182,4 +184,4 @@ export function Scorecard({
       </p>
     </section>
   );
-}
+});

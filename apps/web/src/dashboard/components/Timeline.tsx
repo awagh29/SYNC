@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Pause, Play, SkipForward } from 'lucide-react';
 import { simSpeeds, type SimSpeed } from '../../sync/source';
 
@@ -58,13 +59,7 @@ export function Timeline(p: Props) {
       <div className="track">
         <div className="rail" />
         <div className="played" style={{ width: pct(p.t) }} />
-        {p.markers.map((m, i) => (
-          <span
-            key={i}
-            className={`marker ${m.kind}`}
-            style={{ left: pct(m.t) }}
-          />
-        ))}
+        <Markers markers={p.markers} end={p.end} />
         {p.T <= p.end && (
           <span className="horizon" style={{ left: pct(p.T) }} title="T" />
         )}
@@ -84,3 +79,24 @@ export function Timeline(p: Props) {
     </footer>
   );
 }
+
+/**
+ * Arrival / Wait ticks on the track. Hundreds of spans that only change with
+ * the data, so they skip the playback-time re-renders.
+ */
+const Markers = memo(function Markers({
+  markers,
+  end,
+}: {
+  markers: Marker[];
+  end: number;
+}) {
+  const pct = (v: number) => `${(100 * v) / Math.max(1, end)}%`;
+  return (
+    <>
+      {markers.map((m, i) => (
+        <span key={i} className={`marker ${m.kind}`} style={{ left: pct(m.t) }} />
+      ))}
+    </>
+  );
+});

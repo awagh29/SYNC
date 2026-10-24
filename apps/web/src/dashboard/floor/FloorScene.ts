@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import type {
   AgentView,
   CustomerView,
+  Facing,
   Scene as FloorState,
   SlotView,
 } from '../model/scene';
@@ -26,12 +27,18 @@ export interface Highlight {
 }
 /** Everything the scene reads each frame (supplied by FloorCanvas through a ref). */
 export interface FloorInput {
-  scene: FloorState | null;
+  /**
+   * The floor at the current playback time. Called every frame, so people
+   * move smoothly even while React is busy re-rendering the panels.
+   */
+  scene: () => FloorState | null;
   highlight: Highlight;
   reducedMotion: boolean;
 }
 
 const HALF = TILE_PX / 2;
+/** Catch-up speed on screen, grid units per wall second (normal walks are ~2). */
+const GLIDE_SPEED = 10;
 /** Feet sit this far below a person's lane position (sprites are drawn bottom-anchored). */
 const FEET = 14;
 /** Wood planks for the staff area (the Kenney packs have no wooden floor tile). */
@@ -253,8 +260,11 @@ export class FloorScene extends Phaser.Scene {
   }
 
   /** Phaser calls this every frame. */
-  update(time: number) {
-    const { scene, highlight, reducedMotion } = this.read();
+  update(time: number, delta: number) {
+    const input = this.read();
+    const { highlight, reducedMotion } = input;
+    const computed = input.scene();
+    const scene = computed && this.glide(computed, delta / 1000);
     this.g.clear();
     this.used.clear();
     if (!scene) return this.hideUnused();
@@ -269,6 +279,52 @@ export class FloorScene extends Phaser.Scene {
     for (const cu of scene.customers)
       this.drawCustomer(cu, highlight.jobId === cu.id, scene.t);
     this.hideUnused();
+  }
+
+  /** Where each person is drawn (grid units); moves toward the computed spot. */
+  private shown = new Map<string, { x: number; y: number }>();
+
+  /**
+   * Nobody ever teleports. Positions come from the playback time, which can
+   * jump (live start, catching up, a scenario switch) or be corrected by late
+   * rows. Each person is drawn where they were last frame and moves toward
+   * their computed spot: normal walks (well under GLIDE_SPEED) are followed
+   * exactly; larger gaps are covered quickly at GLIDE_SPEED. Customers who
+   * appear after the first frame start at the entrance and hurry in.
+   */
+  private glide(scene: FloorState, dt: number): FloorState {
+    const first = this.shown.size === 0;
+    const door = { x: scene.lanes.door.x, y: scene.lanes.door.y - 0.3 };
+    const step = GLIDE_SPEED * Math.min(dt, 0.25);
+    const seen = new Set<string>();
+    const move = <T extends { x: number; y: number; facing: Facing }>(
+      key: string,
+      p: T,
+      spawn?: { x: number; y: number },
+    ): T => {
+      seen.add(key);
+      const from = this.shown.get(key) ?? (first || !spawn ? p : spawn);
+      const dx = p.x - from.x;
+      const dy = p.y - from.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist <= step) {
+        this.shown.set(key, { x: p.x, y: p.y });
+        return p;
+      }
+      // Hurry toward the spot, facing the way we go.
+      const k = step / dist;
+      const at = { x: from.x + dx * k, y: from.y + dy * k };
+      this.shown.set(key, at);
+      const facing: Facing =
+        Math.abs(dx) >= Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : dy < 0 ? 'up' : 'down';
+      // Customers show the walk cycle while hurrying; staff have no walk flag.
+      return { ...p, ...at, facing, ...('walking' in p ? { walking: true } : {}) };
+    };
+    const agents = scene.agents.map((a) => move(`a:${a.id}`, a));
+    const customers = scene.customers.map((cu) => move(`c:${cu.id}`, cu, door));
+    // Forget people who left, so a returning id starts fresh at the door.
+    for (const key of this.shown.keys()) if (!seen.has(key)) this.shown.delete(key);
+    return { ...scene, agents, customers };
   }
 
   /** Front wall with door gaps; queue rope only while the line is folded. */

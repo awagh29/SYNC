@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type {
   Agent,
   Decision,
@@ -51,7 +52,8 @@ function KindChip({ kind }: { kind: Decision['kind'] }) {
   );
 }
 
-export function DecisionsPanel(p: Props) {
+/** Memoised: re-renders when a new decision is due, not on every playback tick. */
+export const DecisionsPanel = memo(function DecisionsPanel(p: Props) {
   const { list, counts } = decisionsAt(p.decisions, p.t, p.filter);
   // Id → display lookups; fall back to the raw id.
   const agent = (id?: string) => p.agents.find((a) => a.id === id);
@@ -211,4 +213,4 @@ export function DecisionsPanel(p: Props) {
       )}
     </aside>
   );
-}
+});
