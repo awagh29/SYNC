@@ -1,0 +1,23 @@
+{
+  "metricsQuery": "SELECT run_id, tick, reward, net_reward, orders_received, delivered_orders, unfinished_orders, on_time_orders, late_open_orders, reported_anthropic_cost_microusd, reported_coordinator_ms, coordinator_sample_count FROM ui_metrics",
+  "runsQuery": "SELECT id, name, seed, tick, status, mode, policy_json FROM ui_runs",
+  "fields": {
+    "terminalValue": "reward",
+    "objective": "net_reward",
+    "received": "orders_received",
+    "delivered": "delivered_orders",
+    "unfinished": "unfinished_orders",
+    "onTime": "on_time_orders",
+    "overdueUnfinished": "late_open_orders",
+    "apiCost": "reported_anthropic_cost_microusd",
+    "planningTime": "reported_coordinator_ms",
+    "invariantViolations": null
+  },
+  "units": { "apiCost": "microusd", "planningTime": "ms" },
+  "policyAliases": {
+    "FCFS": ["fcfs", "fifo", "first_come_first_served"],
+    "Claude": ["claude", "claude_scheduler", "claude_baseline", "llm_baseline"],
+    "SYNC": ["sync", "primal_dual", "online_primal_dual", "sync_primal_dual"]
+  },
+  "runIds": {}
+}
